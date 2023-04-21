@@ -1,0 +1,18 @@
+ResNet.dtype = %jnp.float16
+
+load_cifar10.batch_size = 128
+
+sgd.momentum = 0.9
+sgd.nesterov = False
+
+training.initial_lr = 0.1
+training.schedule_decay = 0.2
+training.schedule_boundaries = (60, 120, 160)
+training.total_epochs = 200
+
+training.weight_decay_alpha = 5e-4
+training.l2_loss_alpha = 0
+
+training.amp_scaling = 128
+training.save_csv_path = None
+training.load_pyt_weights = "weights.pt"

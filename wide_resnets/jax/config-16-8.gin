@@ -1,0 +1,4 @@
+include "wide_resnets/jax/config-base.gin"
+
+ResNet.block_sizes = (2, 2, 2)
+ResNet.block_channels = (128, 256, 512)

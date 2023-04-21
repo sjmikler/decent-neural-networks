@@ -1,11 +1,14 @@
+import argparse
 import os
 import time
 
-import click
 import flax
+import gin
 import jax
 import jax.numpy as jnp
 import optax
+from rich import print
+import rich.traceback
 from clu import parameter_overview
 from flax.core import FrozenDict
 from jax.random import PRNGKey
@@ -15,64 +18,41 @@ from .dataset import load_cifar10
 from .model import ResNet
 from .weight_conversion import load_and_convert_all
 
+rich.traceback.install()
 
-@click.command()
-@click.option("--dtype", default="float16")
-@click.option("--block-sizes", nargs=3, default=(2, 2, 2))
-@click.option("--block-channels", nargs=3, default=(128, 256, 512))
-@click.option("--block-strides", nargs=3, default=(1, 2, 2))
-@click.option("--batch-size", default=128)
-@click.option("--initial-lr", default=0.1)
-@click.option("--total-epochs", default=200)
-@click.option("--schedule-boundaries", nargs=3, default=(60, 120, 180))
-@click.option("--schedule-decay", default=0.2)
-@click.option("--momentum", default=0.9)
-@click.option("--nesterov", default=True)
-@click.option("--weight-decay-alpha", default=5e-4)
-@click.option("--l2-loss-alpha", default=0)
-@click.option("--amp-scaling", default=128)
-@click.option("--save-csv-path", default=None)
-@click.option("--gpu", default=0)
-@click.option("--load-pyt-weights", default=False)
-def run(
-    dtype,
-    block_sizes,
-    block_channels,
-    block_strides,
-    batch_size,
+# REGISTER CONSTANTS
+gin.constant("jnp.float16", jnp.float16)
+gin.constant("jnp.float32", jnp.float32)
+gin.external_configurable(optax.sgd)
+
+
+@gin.configurable
+def training(
     initial_lr,
     total_epochs,
     schedule_boundaries,
     schedule_decay,
-    momentum,
-    nesterov,
     weight_decay_alpha,
     l2_loss_alpha,
     amp_scaling,
     save_csv_path,
-    gpu,
     load_pyt_weights,
 ):
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
-    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+    print(dict(
+        initial_lr=initial_lr,
+        total_epochs=total_epochs,
+        schedule_boundaries=schedule_boundaries,
+        schedule_decay=schedule_decay,
+        weight_decay_alpha=weight_decay_alpha,
+        l2_loss_alpha=l2_loss_alpha,
+        amp_scaling=amp_scaling,
+        save_csv_path=save_csv_path,
+        load_pyt_weights=load_pyt_weights,
+    ))
 
-    if dtype == "float32":
-        dtype = jnp.float32
-    elif dtype == "float16":
-        dtype = jnp.float16
-    else:
-        raise KeyError
-
-    device = jax.devices()[0]
     rng = PRNGKey(0)
-
-    model = ResNet(
-        num_classes=10,
-        dtype=dtype,
-        block_sizes=block_sizes,
-        block_channels=block_channels,
-        block_strides=block_strides,
-    )
+    device = jax.devices()[0]
+    model = ResNet(num_classes=10)
 
     jax_weights = model.init(rng, jnp.ones((1, 32, 32, 3)), train=True)
 
@@ -83,7 +63,7 @@ def run(
     print(parameter_overview.get_parameter_overview(jax_weights["params"]))
     params = jax_weights
 
-    train_loader, valid_loader = load_cifar10(batch_size)
+    train_loader, valid_loader = load_cifar10()
     epoch_steps = len(train_loader)
 
     schedule = optax.piecewise_constant_schedule(
@@ -91,7 +71,7 @@ def run(
         boundaries_and_scales={epoch_steps * boundary: schedule_decay for boundary in schedule_boundaries},
     )
 
-    optimizer = optax.sgd(learning_rate=schedule, momentum=momentum, nesterov=nesterov)
+    optimizer = optax.sgd(learning_rate=schedule)
     optimizer_state = optimizer.init(params["params"])
 
     def get_l2(params, alpha):
@@ -104,7 +84,6 @@ def run(
         flat_params = flax.traverse_util.flatten_dict(params)
         flat_updates = flax.traverse_util.flatten_dict(updates)
         for k, v in flat_params.items():
-            # if "kernel" in k:
             flat_updates[k] += v * beta
         return FrozenDict(flax.traverse_util.unflatten_dict(flat_updates))
 
@@ -193,4 +172,20 @@ def run(
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--gpu", required=False, default=0)
+
+    args = parser.parse_args()
+
+    path = args.config
+    if not path.endswith(".gin"):
+        path = path + ".gin"
+    if not path.startswith("config"):
+        path = "config-" + path
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
+    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+
+    gin.parse_config_file(f"wide_resnets/jax/{path}")
+    training()

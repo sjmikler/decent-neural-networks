@@ -63,7 +63,7 @@ class ResNet(nn.Module):
         )(x)
 
         for i, (size, channels, stride) in enumerate(
-            zip(self.block_sizes, self.block_channels, self.block_strides)
+                zip(self.block_sizes, self.block_channels, self.block_strides)
         ):
             x = ResidualBlock(
                 size=size,

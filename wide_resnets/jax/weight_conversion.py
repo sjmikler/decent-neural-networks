@@ -24,3 +24,4 @@ def load_and_convert_all(pyt_weights_path, jax_weights):
 
     new_jax_params = unflatten_dict(new_jax_params)
     params = FrozenDict({**jax_weights, "params": new_jax_params})
+    return params

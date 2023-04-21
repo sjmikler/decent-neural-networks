@@ -23,7 +23,7 @@ def load_cifar10(batch_size=128):
     ])
 
     train_dataset = torchvision.datasets.CIFAR10(
-        root="~/Datasets", train=True, download=True, transform=train_transforms,
+        root="/data/Datasets/torchvision", train=True, download=True, transform=train_transforms,
     )
 
     train_loader = torch.utils.data.DataLoader(
@@ -31,7 +31,7 @@ def load_cifar10(batch_size=128):
     )
 
     valid_dataset = torchvision.datasets.CIFAR10(
-        root="~/Datasets", train=False, download=True, transform=test_transforms,
+        root="/data/Datasets/torchvision", train=False, download=True, transform=test_transforms,
     )
 
     valid_loader = torch.utils.data.DataLoader(

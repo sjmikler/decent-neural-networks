@@ -8,9 +8,8 @@ import torch.utils.data
 
 from progress_table import ProgressTable
 
-from wrn.pytorch.model import ResNet
-
-from . import model, dataset
+from .model import ResNet
+from .dataset import load_cifar10
 
 
 @click.command()
@@ -21,62 +20,50 @@ from . import model, dataset
 @click.option("--batch-size", default=128)
 @click.option("--initial-lr", default=0.1)
 @click.option("--total-epochs", default=200)
-@click.option("--schedule-boundaries", nargs=3, default=(60, 120, 180))
+@click.option("--schedule-boundaries", nargs=3, default=(60, 120, 160))
 @click.option("--schedule-decay", default=0.2)
 @click.option("--weight-decay-alpha", default=5e-4)
 @click.option("--nesterov", default=True)
 @click.option("--save-csv-path", default=None)
 @click.option("--gpu", default=0)
-@click.option("--save-pyt-weights", default=False)
-def run(
-    dtype,
-    block_sizes,
-    block_channels,
-    block_strides,
-    batch_size,
-    initial_lr,
-    total_epochs,
-    schedule_boundaries,
-    schedule_decay,
-    weight_decay_alpha,
-    nesterov,
-    save_csv_path,
-    gpu,
-    save_pyt_weights,
-):
+@click.option("--save-pyt-weights", default="")
+def run(dtype,
+        block_sizes,
+        block_channels,
+        block_strides,
+        batch_size,
+        initial_lr,
+        total_epochs,
+        schedule_boundaries,
+        schedule_decay,
+        weight_decay_alpha,
+        nesterov,
+        save_csv_path,
+        gpu,
+        save_pyt_weights, ):
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
-    train_loader, valid_loader = dataset.load_cifar10()
+    train_loader, valid_loader = load_cifar10()
 
-    model = ResNet(
-        num_classes=10,
-        block_sizes=block_sizes,
-        block_channels=block_channels,
-        block_strides=block_strides,
-    )
+    model = ResNet(num_classes=10,
+                   block_sizes=block_sizes,
+                   block_channels=block_channels,
+                   block_strides=block_strides, )
 
     torchinfo.summary(model)
 
     if save_pyt_weights:
         pyt_weights = model.state_dict()
-        pyt_weights = {
-            k: v for k, v in pyt_weights.items() if "num_batches_tracked" not in k and "running" not in k
-        }
+        pyt_weights = {k: v for k, v in pyt_weights.items() if "num_batches_tracked" not in k and "running" not in k}
         torch.save(pyt_weights, save_pyt_weights)
 
     model = model.cuda()
 
-    optimizer = torch.optim.SGD(
-        model.parameters(),
-        lr=initial_lr,
-        momentum=schedule_decay,
-        weight_decay=weight_decay_alpha,
-        nesterov=nesterov,
-    )
-    schedule = torch.optim.lr_scheduler.MultiStepLR(
-        optimizer,
-        milestones=schedule_boundaries,
-        gamma=schedule_decay,
-    )
+    optimizer = torch.optim.SGD(model.parameters(),
+                                lr=initial_lr,
+                                momentum=schedule_decay,
+                                weight_decay=weight_decay_alpha,
+                                nesterov=nesterov, )
+    schedule = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=schedule_boundaries, gamma=schedule_decay, )
     loss_fn = torch.nn.CrossEntropyLoss()
     scaler = torch.cuda.amp.GradScaler(enabled=True)
 

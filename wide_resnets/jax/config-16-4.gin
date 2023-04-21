@@ -1,0 +1,6 @@
+include "wide_resnets/jax/config-base.gin"
+
+ResNet.dtype = %float16
+
+ResNet.block_sizes = (2, 2, 2)
+ResNet.block_channels = (64, 128, 256)
